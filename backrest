@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+
+# Copyright 2022 H. Turgut Uyar <uyar@tekir.org>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its contributors
+#    may be used to endorse or promote products derived from this software
+#    without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+import logging
+import os.path
+import platform
+import subprocess
+import sys
+from argparse import ArgumentParser
+from configparser import ConfigParser
+from pathlib import Path
+
+DRY_RUN = False
+
+
+def run(command, *, sudo=False):
+    if sudo:
+        command = f"sudo {command}"
+    logging.info(f"{command}")
+    if DRY_RUN:
+        return
+    process = subprocess.run(command, shell=True)
+    if process.returncode != 0:
+        raise RuntimeError()
+
+
+def newer(x, y):
+    return (not y.exists()) or (x.stat().st_mtime_ns > y.stat().st_mtime_ns)
+
+
+def different(x, y):
+    process = subprocess.run(f"diff -q {x} {y} > /dev/null", shell=True)
+    return process.returncode != 0
+
+
+def copy_files(section, key, *, host, path, src, dst):
+    src_files = [line
+                 for line in section.get(key, "").splitlines()
+                 if line.strip()]
+    for src_file in src_files:
+        src_path = Path(src, path, src_file).resolve()
+        if not src_path.exists():
+            continue
+        dst_path = Path(dst, host, path, src_file).resolve()
+        if (not dst_path.exists()) or \
+                (newer(src_path, dst_path) and different(src_path, dst_path)):
+            missing = []
+            src_parent, dst_parent = src_path.parent, dst_path.parent
+            while not dst_parent.exists():
+                missing.insert(0, (dst_parent, src_parent.stat().st_mode))
+                src_parent, dst_parent = src_parent.parent, dst_parent.parent
+            for parent, mode in missing:
+                parent.mkdir(mode=mode)
+            run(f'cp -a "{src_path}" "{dst_path}"')
+
+
+def make_parser():
+    parser = ArgumentParser(prog="backrest")
+    parser.add_argument("--version", action="version", version="20220927")
+    parser.add_argument("--dry-run", action="store_true", dest="dry_run")
+
+    direction = parser.add_subparsers(dest="direction")
+    direction.required = True
+
+    direction.add_parser("up", help="back files up")
+    direction.add_parser("down", help="back files down")
+    return parser
+
+
+def main():
+    global DRY_RUN
+
+    logging.basicConfig(level=logging.INFO, format="")
+
+    parser = make_parser()
+    arguments = parser.parse_args(sys.argv[1:])
+
+    DRY_RUN = arguments.dry_run
+
+    direction = arguments.direction
+
+    host = platform.node()
+
+    config = ConfigParser()
+    config_dir = Path(os.path.expandvars("$XDG_CONFIG_HOME")) / "backrest"
+    config.read(config_dir / "backrest.conf")
+
+    src_base = Path.home()
+    dst_base = Path(os.path.expandvars(config["main"]["dst"]))
+    if not dst_base.exists():
+        dst_mode = src_base.stat().st_mode
+        dst_base.mkdir(mode=dst_mode)
+        for folder in [dst_base / "shared", dst_base / host]:
+            folder.mkdir(mode=dst_mode)
+
+    sections = [s for s in config.sections() if s != "main"]
+    for section in sections:
+        # logging.info(f"-- {section} --")
+        if direction == "up":
+            base = os.path.expandvars(config[section].get("base", "$HOME"))
+            src = Path(base).relative_to(src_base)
+            copy_files(config[section], "shared", host="shared",
+                       path=src, src=src_base, dst=dst_base)
+            copy_files(config[section], "HOST", host=host,
+                       path=src, src=src_base, dst=dst_base)
+            copy_files(config[section], host, host=host,
+                       path=src, src=src_base, dst=dst_base)
+        else:
+            raise NotImplementedError("not implemented yet")
+
+
+if __name__ == "__main__":
+    main()
