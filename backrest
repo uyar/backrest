@@ -59,7 +59,9 @@ def different(x, y):
     return process.returncode != 0
 
 
-def copy_files(section, key, *, host, path, src, dst):
+def copy_files(direction, section, key, *, path, src, dst):
+    if direction == "down":
+        src, dst = dst, src
     src_files = [line
                  for line in section.get(key, "").splitlines()
                  if line.strip()]
@@ -67,7 +69,7 @@ def copy_files(section, key, *, host, path, src, dst):
         src_path = Path(src, path, src_file).resolve()
         if not src_path.exists():
             continue
-        dst_path = Path(dst, host, path, src_file).resolve()
+        dst_path = Path(dst, path, src_file).resolve()
         if (not dst_path.exists()) or \
                 (newer(src_path, dst_path) and different(src_path, dst_path)):
             missing = []
@@ -122,17 +124,14 @@ def main():
     sections = [s for s in config.sections() if s != "main"]
     for section in sections:
         # logging.info(f"-- {section} --")
-        if direction == "up":
-            base = os.path.expandvars(config[section].get("base", "$HOME"))
-            src = Path(base).relative_to(src_base)
-            copy_files(config[section], "shared", host="shared",
-                       path=src, src=src_base, dst=dst_base)
-            copy_files(config[section], "HOST", host=host,
-                       path=src, src=src_base, dst=dst_base)
-            copy_files(config[section], host, host=host,
-                       path=src, src=src_base, dst=dst_base)
-        else:
-            raise NotImplementedError("not implemented yet")
+        base = os.path.expandvars(config[section].get("base", "$HOME"))
+        src = Path(base).relative_to(src_base)
+        copy_files(direction, config[section], "shared", path=src,
+                   src=src_base, dst=dst_base / "shared")
+        copy_files(direction, config[section], "HOST", path=src,
+                   src=src_base, dst=dst_base / host)
+        copy_files(direction, config[section], host, path=src,
+                   src=src_base, dst=dst_base / host)
 
 
 if __name__ == "__main__":
