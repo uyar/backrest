@@ -84,7 +84,7 @@ def copy_files(direction, section, key, *, path, src, dst):
 
 def make_parser():
     parser = ArgumentParser(prog="backrest")
-    parser.add_argument("--version", action="version", version="20220927")
+    parser.add_argument("--version", action="version", version="20220928")
     parser.add_argument("--dry-run", action="store_true", dest="dry_run")
 
     direction = parser.add_subparsers(dest="direction")
@@ -110,8 +110,8 @@ def main():
     host = platform.node()
 
     config = ConfigParser()
-    config_dir = Path(os.path.expandvars("$XDG_CONFIG_HOME")) / "backrest"
-    config.read(config_dir / "backrest.conf")
+    config_file = Path(os.path.expandvars("$XDG_CONFIG_HOME")) / "backrest.conf"
+    config.read(config_file)
 
     src_base = Path.home()
     dst_base = Path(os.path.expandvars(config["main"]["dst"]))
