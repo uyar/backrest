@@ -92,12 +92,8 @@ def make_parser():
     parser = ArgumentParser(prog="backrest")
     parser.add_argument("--version", action="version", version="20220928")
     parser.add_argument("--dry-run", action="store_true", dest="dry_run")
-
-    direction = parser.add_subparsers(dest="direction")
-    direction.required = True
-
-    direction.add_parser("up", help="back files up")
-    direction.add_parser("down", help="back files down")
+    parser.add_argument("direction", choices=["up", "down"],
+                        help="up for backup, down for restore")
     return parser
 
 
