@@ -55,7 +55,7 @@ def newer(x, y):
 
 
 def different(x, y):
-    process = subprocess.run(f"diff -q {x} {y} > /dev/null", shell=True)
+    process = subprocess.run(f'diff -q "{x}" "{y}" > /dev/null', shell=True)
     return process.returncode != 0
 
 
@@ -80,6 +80,12 @@ def copy_files(direction, section, key, *, path, src, dst):
             for parent, mode in missing:
                 parent.mkdir(mode=mode)
             run(f'cp -a "{src_path}" "{dst_path}"')
+        elif dst_path.exists():
+            src_mode = src_path.stat().st_mode
+            dst_mode = dst_path.stat().st_mode
+            if dst_mode != src_mode:
+                octal_mode = oct(src_mode)
+                run(f'chmod {octal_mode[-4:]} "{dst_path}"')
 
 
 def make_parser():
