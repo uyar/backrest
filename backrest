@@ -27,6 +27,8 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+__version__ = "20221004"
+
 import logging
 import os.path
 import platform
@@ -90,7 +92,7 @@ def copy_files(direction, section, key, *, path, src, dst):
 
 def make_parser():
     parser = ArgumentParser(prog="backrest")
-    parser.add_argument("--version", action="version", version="20220928")
+    parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--dry-run", action="store_true", dest="dry_run")
     parser.add_argument("direction", choices=["up", "down"],
                         help="up for backup, down for restore")
@@ -126,6 +128,11 @@ def main():
     sections = [s for s in config.sections() if s != "main"]
     for section in sections:
         # logging.info(f"-- {section} --")
+        lock = config[section].get("lock")
+        if lock is not None:
+            if subprocess.run(["pidof", "-qs", lock]).returncode == 0:
+                # logging.info(f"-- {lock} is running")
+                continue
         base = os.path.expandvars(config[section].get("base", "$HOME"))
         src = Path(base).relative_to(src_base)
         copy_files(direction, config[section], "shared", path=src,
