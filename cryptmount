@@ -12,9 +12,9 @@ def main():
     config_file = Path(os.path.expandvars("$XDG_CONFIG_HOME")) / "cryptfs.conf"
     config.read(config_file)
 
-    backrest = config["backrest"]
-    command = "gocryptfs %(location)s %(mount)s" % backrest
-    subprocess.run(shlex.split(command), input=backrest["password"], text=True)
+    settings = config["cryptfs"]
+    command = "gocryptfs %(location)s %(mount)s" % settings
+    subprocess.run(shlex.split(command), input=settings["password"], text=True)
 
 
 if __name__ == "__main__":
